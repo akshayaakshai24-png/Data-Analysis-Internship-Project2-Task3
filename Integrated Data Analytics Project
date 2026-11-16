@@ -1,0 +1,153 @@
+import pandas as pd
+import numpy as np
+import sqlite3
+import matplotlib.pyplot as plt
+from pathlib import Path
+
+# Create folders
+Path("outputs").mkdir(exist_ok=True)
+
+# 1. LOAD DATA
+df = pd.read_csv("sales_data.csv")
+
+print("ORIGINAL DATA")
+print(df.head())
+
+# 2. EXCEL - READ, CLEAN AND EXPORT
+print("\nEXCEL DATA CLEANING")
+
+df = df.drop_duplicates()
+df = df.dropna(subset=["Order_ID"])
+
+for col in ["Quantity", "Revenue", "Profit"]:
+    df[col] = pd.to_numeric(df[col], errors="coerce")
+    df[col] = df[col].fillna(df[col].median())
+
+df["Product"] = df["Product"].fillna("Unknown")
+df["Region"] = df["Region"].fillna("Unknown")
+
+df.to_excel(
+    "outputs/Cleaned_Sales_Data.xlsx",
+    index=False
+)
+
+print("Excel file exported successfully")
+
+# 3. SQL - SQLITE DATABASE
+print("\nSQL DATABASE ANALYSIS")
+
+connection = sqlite3.connect(
+    "outputs/sales_database.db"
+)
+
+df.to_sql(
+    "sales",
+    connection,
+    if_exists="replace",
+    index=False
+)
+
+query = """
+SELECT Product,
+       SUM(Revenue) AS Total_Revenue,
+       SUM(Profit) AS Total_Profit
+FROM sales
+GROUP BY Product
+ORDER BY Total_Revenue DESC;
+"""
+
+sql_result = pd.read_sql_query(
+    query, connection
+)
+
+print(sql_result)
+
+sql_result.to_csv(
+    "outputs/SQL_Analysis.csv",
+    index=False
+)
+
+connection.close()
+
+# 4. PYTHON - PANDAS AND NUMPY
+print("\nPYTHON DATA ANALYSIS")
+
+print(df.describe())
+
+revenue = np.array(df["Revenue"])
+
+print("Total Revenue:", np.sum(revenue))
+print("Average Revenue:", np.mean(revenue))
+print("Maximum Revenue:", np.max(revenue))
+print("Minimum Revenue:", np.min(revenue))
+
+# 5. EDA - EXPLORATORY DATA ANALYSIS
+print("\nEDA ANALYSIS")
+
+print("Missing Values:")
+print(df.isnull().sum())
+
+missing = df.isnull().sum()
+missing.to_csv("outputs/Missing_Values.csv")
+
+correlation = df[
+    ["Quantity", "Revenue", "Profit"]
+].corr()
+
+print("Correlation Matrix:")
+print(correlation)
+
+correlation.to_csv(
+    "outputs/Correlation_Matrix.csv"
+)
+
+# Revenue chart
+df.groupby("Product")["Revenue"].sum().plot(
+    kind="bar",
+    title="Revenue by Product"
+)
+
+plt.xlabel("Product")
+plt.ylabel("Revenue")
+plt.tight_layout()
+plt.savefig("outputs/Revenue_Chart.png")
+plt.close()
+
+# Correlation heatmap
+plt.figure(figsize=(7, 5))
+plt.imshow(correlation)
+plt.xticks(range(3), correlation.columns)
+plt.yticks(range(3), correlation.columns)
+plt.colorbar()
+
+for i in range(3):
+    for j in range(3):
+        plt.text(
+            j, i,
+            round(correlation.iloc[i, j], 2),
+            ha="center",
+            va="center"
+        )
+
+plt.title("Correlation Heatmap")
+plt.tight_layout()
+plt.savefig("outputs/Correlation_Heatmap.png")
+plt.close()
+
+# 6. POWER BI - EXPORT CLEAN CSV
+print("\nPOWER BI DATA EXPORT")
+
+df["Profit_Margin"] = np.where(
+    df["Revenue"] > 0,
+    (df["Profit"] / df["Revenue"]) * 100,
+    0
+)
+
+df.to_csv(
+    "outputs/PowerBI_Cleaned_Data.csv",
+    index=False
+)
+
+print("Power BI CSV exported successfully")
+
+print("\nALL FIVE MODULES COMPLETED SUCCESSFULLY!")
